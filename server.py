@@ -5,8 +5,9 @@ import google.generativeai as genai
 app = Flask(__name__)
 CORS(app)
 
+
 # Configure the Gemini API
-genai.configure(api_key="AIzaSyDZ34yTZk_P4uQUHeSFXkzYZgsvfkAWUUU")
+genai.configure(api_key="")
 
 @app.route('/chat', methods=['POST'])
 def chat():
