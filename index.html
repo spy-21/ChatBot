@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-html.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#667eea',
+                        secondary: '#764ba2',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer components {
+            .message {
+                @apply mb-5 p-4 rounded-2xl max-w-[90%] relative animate-fadeIn;
+            }
+            .user-message {
+                @apply text-black ml-auto rounded-br-sm text-right bg-white shadow-sm w-auto;
+            }
+            .bot-message {
+                @apply bg-white text-gray-800 mr-auto rounded-bl-sm shadow-sm;
+            }
+            .typing-indicator span {
+                @apply w-2 h-2 bg-primary rounded-full inline-block;
+            }
+            .code-editor {
+                @apply bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto w-full relative;
+            }
+            .code-editor pre {
+                @apply m-0;
+            }
+            .code-editor code {
+                @apply text-sm;
+            }
+            .copy-button {
+                @apply absolute top-2 right-2 px-2 py-1 bg-gray-700 text-white text-xs rounded hover:bg-gray-600 transition-colors;
+            }
+            .language-tag {
+                @apply absolute top-2 left-2 px-2 py-1 bg-gray-800 text-gray-300 text-xs rounded;
+            }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .typing-indicator span {
+            animation: typing 1s infinite;
+        }
+    </style>
+</head>
+
+<body class="bg-black from-primary to-secondary min-h-screen flex items-center justify-center p-5">
+    <div class="w-full max-w-4xl h-[700px]  rounded-2xl shadow-xl flex flex-col overflow-hidden bg-black">
+        <div class="bg-black from-primary to-secondary p-5 text-center">
+            <h2 class="text-xl font-semibold text-white">Chatbot</h2>
+        </div>
+
+        <div class="flex-1 p-5 overflow-y-auto bg-gray-50" id="chat-messages">
+
+        </div>
+
+        <div class="p-5 bg-white border-t border-gray-200 flex gap-3 items-center">
+            <input type="text" id="message-input" placeholder="Type your message..."
+                class="flex-1 px-4 py-3 rounded-full border-2 border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-300 ">
+            <button id="send-button"
+                class="px-6 py-3 bg-gradient-to-r from-primary to-secondary text-black rounded-full font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                Send
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const chatMessages = document.getElementById('chat-messages');
+
+        function isCodeBlock(text) {
+            return text.includes('```') || text.includes('<code>');
+        }
+
+        function extractCode(text) {
+            const codeMatch = text.match(/```(\w+)?\n([\s\S]+?)```/);
+            if (codeMatch) {
+                return {
+                    language: codeMatch[1] || 'javascript',
+                    code: codeMatch[2].trim()
+                };
+            }
+            return null;
+        }
+
+        function createCodeEditor(code, language) {
+            const editorDiv = document.createElement('div');
+            editorDiv.className = 'code-editor';
+
+            const pre = document.createElement('pre');
+            const codeElement = document.createElement('code');
+            codeElement.className = `language-${language}`;
+            codeElement.textContent = code;
+            pre.appendChild(codeElement);
+
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-button';
+            copyButton.textContent = 'Copy';
+            copyButton.onclick = () => {
+                navigator.clipboard.writeText(code);
+                copyButton.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyButton.textContent = 'Copy';
+                }, 2000);
+            };
+
+            const languageTag = document.createElement('div');
+            languageTag.className = 'language-tag';
+            languageTag.textContent = language;
+
+            editorDiv.appendChild(languageTag);
+            editorDiv.appendChild(pre);
+            editorDiv.appendChild(copyButton);
+
+            Prism.highlightElement(codeElement);
+
+            return editorDiv;
+        }
+
+        function addMessage(message, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
+
+            if (!isUser && isCodeBlock(message)) {
+                const codeInfo = extractCode(message);
+                if (codeInfo) {
+                    const codeTag = document.createElement('div');
+                    codeTag.className = 'text-sm text-gray-500 mb-2';
+                    codeTag.textContent = '#code';
+                    messageDiv.appendChild(codeTag);
+                    messageDiv.appendChild(createCodeEditor(codeInfo.code, codeInfo.language));
+                } else {
+                    messageDiv.textContent = message;
+                }
+            } else {
+                messageDiv.textContent = message;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.classList.add('typing-indicator', 'flex', 'gap-1.5', 'p-3', 'bg-white', 'rounded-2xl', 'w-fit', 'mb-5', 'shadow-sm');
+            typingDiv.innerHTML = `
+                <span></span>
+                <span></span>
+                <span></span>
+            `;
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return typingDiv;
+        }
+
+        async function getGeminiResponse(message) {
+            try {
+                const response = await fetch('http://localhost:5000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                return data.response;
+            } catch (error) {
+                console.error('Error:', error);
+                return "Sorry, I encountered an error: " + error.message;
+            }
+        }
+
+        async function handleSendMessage() {
+            const message = messageInput.value.trim();
+            if (message) {
+                addMessage(message, true);
+                messageInput.value = '';
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+
+                const typingIndicator = showTypingIndicator();
+
+                try {
+                    const botResponse = await getGeminiResponse(message);
+                    chatMessages.removeChild(typingIndicator);
+                    addMessage(botResponse, false);
+                } catch (error) {
+                    chatMessages.removeChild(typingIndicator);
+                    addMessage("Sorry, something went wrong. Please try again.", false);
+                } finally {
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    messageInput.focus();
+                }
+            }
+        }
+
+        sendButton.addEventListener('click', handleSendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSendMessage();
+            }
+        });
+    </script>
+</body>
+
+</html>
